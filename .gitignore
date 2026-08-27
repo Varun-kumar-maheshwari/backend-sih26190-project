@@ -1,0 +1,6 @@
+node_modules/
+.env
+.idea/
+.agents/
+.claude/
+.windsurf/
