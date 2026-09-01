@@ -4,10 +4,133 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  INVESTIGATOR
+  FORENSIC_EXPERT
+  COURT_CLERK
+}
+
+enum Department {
+  GENERAL_DUTY
+  CYBER_CELL
+  NARCOTICS
+  HOMICIDE
+  ECONOMIC_OFFENCES
+  FORENSICS_LAB
+}
+
+enum AuditAction {
+  UPLOAD
+  VIEW
+  DELETE
+  SHARE
+  REDACT
+}
+
+enum DocumentStatus {
+  REDACTED
+  PENDING_REDACTION
+  FAILED
+}
+
+enum DocumentType {
+  FIR_COPY
+  WITNESS_STATEMENT
+  SEIZURE_MEMO
+  FORENSIC_REPORT
+  CHARGE_SHEET
+  OTHER
+}
+
+enum CaseStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  CLOSED
+}
+
+model User {
+  id           String          @id @default(uuid())
+  email        String          @unique
+  passwordHash String
+  role         Role
+  department   Department
+  refreshToken String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  cases        Cases[]
+  documents    Documents[]
+  auditLogs    Audit_Logs[]
+  secureShares Secure_Shares[]
+}
+
+model Cases {
+  id               String      @id @default(uuid())
+  caseNumber       String
+  title            String
+  description      String?
+  status           CaseStatus
+  leadInvestigator String
+  user             User        @relation(fields: [leadInvestigator], references: [id])
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  documents        Documents[]
+}
+
+model Documents {
+  id                String          @id @default(uuid())
+  title             String
+  documentReference String?
+  type              DocumentType
+  caseId            String
+  case              Cases           @relation(fields: [caseId], references: [id])
+  uploaderId        String
+  userId            User            @relation(fields: [uploaderId], references: [id])
+  originalFilePath  String
+  redactedFilePath  String?
+  fileHash          String
+  idempotencyKey    String          @unique
+  extractedText     String?
+  deviceMetaData    Json            @default("{}")
+  status            DocumentStatus  @default(PENDING_REDACTION)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  auditLogs         Audit_Logs[]
+  secureShares      Secure_Shares[]
+}
+
+model Audit_Logs {
+  id           String      @id @default(uuid())
+  documentId   String
+  document     Documents   @relation(fields: [documentId], references: [id])
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  previousHash String?
+  currentHash  String
+  timeStamp    DateTime    @default(now())
+  action       AuditAction
+}
+
+model Secure_Shares {
+  id           String    @id @default(uuid())
+  document     Documents @relation(fields: [documentId], references: [id])
+  documentId   String
+  user         User      @relation(fields: [createdBy], references: [id])
+  createdBy    String
+  targetEmail  String
+  maxViews     Int
+  currentViews Int       @default(0)
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

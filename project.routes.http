@@ -1,0 +1,95 @@
+@baseUrl = http://localhost:5000
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYmNlNWI2LWViZTktNGJjMy04ODg1LWY4ZmM4NDQ4NTcwMyIsInJvbGUiOiJBRE1JTiIsImRlcGFydG1lbnQiOiJDWUJFUl9DRUxMIiwiaWF0IjoxNzg4MjgyNzIxLCJleHAiOjE3ODgyODM2MjF9.Rf3hMY4_5JGfgfVNhAQ8ZKJdfgXjlaBXzaRn1kuWhK0
+@caseId = d28aa2ec-76a6-4450-ae4e-d906ef3d010e
+@targetUserId = paste-user-id-here
+
+### Health check
+# Expected: 200
+GET {{baseUrl}}/api/health
+
+### Login
+# Expected: 200 and an accessToken
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@sakshyasetu.gov.in",
+  "password": "Admin@12345"
+}
+
+### Refresh token
+# Expected: 200 and a new accessToken if refresh cookie is present
+GET {{baseUrl}}/api/auth/refresh
+
+### Logout
+# Expected: 200 and cookie cleared
+POST {{baseUrl}}/api/auth/logout
+
+### Register staff (ADMIN only)
+# Expected: 201 for ADMIN, or 403/401 otherwise
+POST {{baseUrl}}/api/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "email": "investigator2@sakshyasetu.gov.in",
+  "password": "Password@123",
+  "role": "INVESTIGATOR",
+  "department": "CYBER_CELL"
+}
+
+### Reset user password (ADMIN only, CYBER_CELL department required)
+# Expected: 200 if admin has CYBER_CELL department, else 403
+PATCH {{baseUrl}}/api/users/{{targetUserId}}/reset-password
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "newPassword": "NewPass@123"
+}
+
+### Upload document to case
+POST {{baseUrl}}/api/cases/{{caseId}}/documents
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="title"
+
+Evidence report
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="type"
+
+FIR_COPY
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="idempotencyKey"
+
+{{$uuid}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Get all cases
+# Expected: 200
+GET {{baseUrl}}/api/cases
+Authorization: Bearer {{accessToken}}
+
+### Get one case
+# Expected: 200, or 404 if the case does not exist
+GET {{baseUrl}}/api/cases/{{caseId}}
+Authorization: Bearer {{accessToken}}
+
+### Create a case
+# Expected: 201 for ADMIN/INVESTIGATOR, or 403 for other roles
+POST {{baseUrl}}/api/cases
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "caseNumber": "CASE-001",
+  "title": "Sample case",
+  "description": "Test case description"
+}
