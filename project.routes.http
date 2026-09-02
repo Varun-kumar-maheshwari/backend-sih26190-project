@@ -1,7 +1,8 @@
 @baseUrl = http://localhost:5000
-@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYmNlNWI2LWViZTktNGJjMy04ODg1LWY4ZmM4NDQ4NTcwMyIsInJvbGUiOiJBRE1JTiIsImRlcGFydG1lbnQiOiJDWUJFUl9DRUxMIiwiaWF0IjoxNzg4MjgyNzIxLCJleHAiOjE3ODgyODM2MjF9.Rf3hMY4_5JGfgfVNhAQ8ZKJdfgXjlaBXzaRn1kuWhK0
-@caseId = d28aa2ec-76a6-4450-ae4e-d906ef3d010e
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYmNlNWI2LWViZTktNGJjMy04ODg1LWY4ZmM4NDQ4NTcwMyIsInJvbGUiOiJBRE1JTiIsImRlcGFydG1lbnQiOiJDWUJFUl9DRUxMIiwiaWF0IjoxNzg4MzY0ODU3LCJleHAiOjE3ODgzNjU3NTd9.0gq5-YebQaZ9MKBEOvioX3U5QTv65uqqxbCEf3mM2E0
+@caseId = ee8432ea-ca00-4420-9103-6034d70a3f43
 @targetUserId = paste-user-id-here
+@documentId = 377b07a3-e448-4baa-8c53-0e8b10bc06c6
 
 ### Health check
 # Expected: 200
@@ -72,6 +73,16 @@ Content-Type: application/pdf
 < ./sample.pdf
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
+### Get all documents for a case
+# Expected: 200 with a documents array
+GET {{baseUrl}}/api/cases/{{caseId}}/documents
+Authorization: Bearer {{accessToken}}
+
+### Get one document
+# Expected: 200 with a document object, or 404 if it does not exist
+GET {{baseUrl}}/api/cases/{{caseId}}/documents/{{documentId}}
+Authorization: Bearer {{accessToken}}
+
 ### Get all cases
 # Expected: 200
 GET {{baseUrl}}/api/cases
@@ -93,3 +104,9 @@ Content-Type: application/json
   "title": "Sample case",
   "description": "Test case description"
 }
+
+
+### Mock redaction (internal function)
+# mockRedaction is not exposed as an HTTP route yet, so there is no request to send here.
+# It is called by application code with a saved file path and document ID:
+# mockRedaction(filePath, {{documentId}})

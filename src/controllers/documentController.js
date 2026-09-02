@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import prisma from '../config/db.js';
-import fs from 'fs/promises';
+import {mockRedaction, redaction} from '../services/aiBridge.js'
 
 export const uploadDocument = async (req, res) => {
   try {
@@ -23,10 +23,11 @@ export const uploadDocument = async (req, res) => {
     }
 
     const docExist = await prisma.documents.findUnique({
-      where: { idempotencyKey:idempotencyKey },
+      where: { idempotencyKey },
     });
-    if(docExist) {
-      return res.status(409).json({message: 'doc is already on db '})
+
+    if (docExist) {
+      return res.status(409).json({ message: 'doc is already on db' });
     }
 
     const caseRecord = await prisma.cases.findUnique({
@@ -43,7 +44,6 @@ export const uploadDocument = async (req, res) => {
       .digest('hex');
 
     const uploadDir = path.join(process.cwd(), 'uploads');
-    const fileName = `${caseId}-${Date.now()}-${req.file.originalname}`;
     await mkdir(uploadDir, { recursive: true });
 
     const fileExtension = path.extname(req.file.originalname) || '.bin';
@@ -52,8 +52,6 @@ export const uploadDocument = async (req, res) => {
     const absolutePath = path.join(process.cwd(), savedFilePath);
 
     await writeFile(absolutePath, req.file.buffer);
-    await fs.mkdir(uploadDir, { recursive: true }); // Ensures the folder exists
-    await fs.writeFile(savedFilePath, req.file.buffer);
 
     const document = await prisma.documents.create({
       data: {
@@ -63,18 +61,42 @@ export const uploadDocument = async (req, res) => {
         type,
         originalFilePath: savedFilePath,
         fileHash: calculatedHash,
-        idempotencyKey
+        idempotencyKey,
       },
     });
 
-    return res.status(201).json({
+    res.status(201).json({
       document,
       hash: calculatedHash,
     });
+    mockRedaction(absolutePath, document.id)
   } catch (error) {
     console.error('Document upload error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
+};
+
+export const getAllDocuments = async (req, res) => {
+  const { caseId } = req.params;
+  const documents = await prisma.documents.findMany({
+    where: { caseId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return res.status(200).json({ documents });
+};
+
+export const getDocumentById = async (req, res) => {
+  const { caseId, documentId } = req.params;
+  const document = await prisma.documents.findFirst({
+    where: { id: documentId, caseId },
+  });
+
+  if (!document) {
+    return res.status(404).json({ message: 'Document not found' });
+  }
+
+  return res.status(200).json({ document });
 };
 
 export default uploadDocument;
