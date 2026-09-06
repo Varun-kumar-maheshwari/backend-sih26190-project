@@ -1,102 +1,99 @@
-import axios from "axios";
-import fs from "fs";
-import { mkdir, writeFile } from "fs/promises";
-import FormData from "form-data";
-import prisma from "../config/db.js";
-import path from "path";
+import axios from 'axios';
+import FormData from 'form-data';
+import path from 'node:path';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import prisma from '../config/db.js';
+import appendAuditLog from '../utils/auditLog.util.js';
 
-const redaction = async (filePath, docId) => {
+const AI_REDACTION_URL = 'http://localhost:8080/api/ai/redactionService';
+const AI_ACTOR_ID = '00000000-0000-0000-0000-000000000001';
+const bucketName = process.env.MINIO_BUCKET || process.env.S3_BUCKET || 'sakshyasetu-evidence';
+
+const s3Client = new S3Client({
+  region: process.env.S3_REGION || 'us-east-1',
+  endpoint: process.env.MINIO_ENDPOINT || process.env.S3_ENDPOINT,
+  forcePathStyle: Boolean(process.env.MINIO_ENDPOINT),
+  credentials: process.env.S3_ACCESS_KEY_ID
+    ? {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      }
+    : undefined,
+});
+
+const redaction = async (fileBuffer, originalName, mimetype, docId, caseId) => {
+  try {
     const form = new FormData();
+    form.append('docId', docId);
+    form.append('file', fileBuffer, {
+      filename: originalName,
+      contentType: mimetype,
+    });
 
-    form.append("docId", docId);
-    form.append("file", fs.createReadStream(filePath));
+    const response = await axios.post(AI_REDACTION_URL, form, {
+      headers: form.getHeaders(),
+      timeout: 120000,
+      maxBodyLength: Infinity,
+    });
 
-    const axiosConfig = {
-        headers: form.getHeaders(),
-        timeout: 120000,
-        maxBodyLength: Infinity
-    };
+    const redactedFileBuffer = Buffer.from(response.data.redactedFileBase64, 'base64');
+    const redactedFileKey = `redacted/${caseId}/${docId}_redacted${path.extname(originalName) || '.bin'}`;
 
-    try {
-        const res = await axios.post(
-            "http://localhost:8080/api/ai/redactionService",
-            form,
-            axiosConfig
-        );
-        const fileBuffer = Buffer.from(res.data.redactedFileBase64, 'base64');
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: redactedFileKey,
+      Body: redactedFileBuffer,
+      ContentType: mimetype,
+    }));
 
-        const uploadDir = path.join(process.cwd(), "uploads");
+    return await prisma.$transaction(async (tx) => {
+      const document = await tx.documents.update({
+        where: { id: docId },
+        data: {
+          redactedFilePath: redactedFileKey,
+          extractedText: response.data.extractedText,
+          status: 'REDACTED',
+        },
+      });
 
-        await mkdir(uploadDir, { recursive: true });
+      await appendAuditLog('REDACT', docId, AI_ACTOR_ID, tx);
+      return document;
+    });
+  } catch (error) {
+    console.error('Redaction failed:', error);
 
-        const redactedFileName = res.data.file.redactedFileName;
+    await prisma.documents.update({
+      where: { id: docId },
+      data: { status: 'FAILED' },
+    });
 
-        const fileExtension =
-            path.extname(redactedFileName) || ".bin";
-
-        const savedFileName = `${Date.now()}${fileExtension}`;
-
-        const absolutePath = path.join(uploadDir, savedFileName);
-
-        await writeFile(
-            absolutePath,
-            fileBuffer
-        );
-
-        const document = await prisma.documents.update({
-            where: {
-                id: docId
-            },
-            data: {
-                redactedFilePath: absolutePath,
-                extractedText: res.data.extractedText,
-                status: 'REDACTED'
-            }
-        });
-
-        return document;
-
-    } catch (e) {
-        console.error("Redaction failed:", e);
-        await prisma.documents.update({
-            where: {id: docId},
-            data: {
-                status: 'FAILED'
-            }
-        })
-        throw e;
-    }
+    throw error;
+  }
 };
 
 const mockRedaction = async (filePath, docId) => {
-    try {
-        console.log(`[MOCK] Simulating AI for document ${docId}...`);
+  try {
+    console.log(`[MOCK] Simulating AI for document ${docId}...`);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
+    await prisma.documents.update({
+      where: { id: docId },
+      data: {
+        extractedText: 'FIR Report: Suspect apprehended near Ayodhya Bypass with a stolen Glock 19. Case registered under IPC 302.',
+        redactedFilePath: filePath,
+        status: 'REDACTED',
+      },
+    });
 
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-
-        await prisma.documents.update({
-            where: { id: docId },
-            data: {
-                extractedText: "FIR Report: Suspect apprehended near Ayodhya Bypass with a stolen Glock 19. Case registered under IPC 302.",
-                redactedFilePath: filePath,
-                status: "REDACTED"
-            }
-        });
-
-        console.log(`[MOCK] Document ${docId} processed successfully.`);
-    } catch (e) {
-        console.error("[MOCK] Failed:", e);
-        await prisma.documents.update({
-            where: {id: docId},
-            data: {
-                status: "FAILED"
-            }
-        })
-        throw e;
-    }
+    console.log(`[MOCK] Document ${docId} processed successfully.`);
+  } catch (error) {
+    console.error('[MOCK] Failed:', error);
+    await prisma.documents.update({
+      where: { id: docId },
+      data: { status: 'FAILED' },
+    });
+    throw error;
+  }
 };
 
-
-export {mockRedaction, redaction};
+export { mockRedaction, redaction };

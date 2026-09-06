@@ -1,10 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 datasource db {
@@ -17,6 +13,15 @@ enum Role {
   INVESTIGATOR
   FORENSIC_EXPERT
   COURT_CLERK
+}
+
+enum Rank {
+  CONSTABLE
+  SUB_INSPECTOR
+  INSPECTOR
+  DSP
+  SP
+  CIVILIAN_EXPERT
 }
 
 enum Department {
@@ -34,6 +39,8 @@ enum AuditAction {
   DELETE
   SHARE
   REDACT
+  RETRY_REDACT
+  GENERATE_BSA_CERT
 }
 
 enum DocumentStatus {
@@ -58,54 +65,88 @@ enum CaseStatus {
 }
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
+  id           String @id @default(uuid())
+  email        String @unique
   passwordHash String
-  role         Role
-  department   Department
+  name         String
+
+  // RBAC and Hierarchy
+  role       Role
+  rank       Rank       @default(SUB_INSPECTOR)
+  isSHO      Boolean    @default(false)
+  department Department
+
+  // Jurisdiction bounds
+  state         String
+  district      String
+  policeStation String
+
   refreshToken String?
-  isActive     Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  cases        Cases[]
-  documents    Documents[]
-  auditLogs    Audit_Logs[]
-  secureShares Secure_Shares[]
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relationships
+  ledCases      Cases[]         @relation("CaseLeader")
+  assignedCases Cases[]         @relation("CaseAssignments")
+  documents     Documents[]
+  auditLogs     Audit_Logs[]
+  secureShares  Secure_Shares[]
 }
 
 model Cases {
-  id               String      @id @default(uuid())
-  caseNumber       String      @unique
-  title            String
-  description      String?
-  status           CaseStatus
+  id          String     @id @default(uuid())
+  caseNumber  String     @unique
+  title       String
+  description String?
+  status      CaseStatus
+
+  // Jurisdiction bounds
+  state         String
+  district      String
+  policeStation String
+
+  // Ownership and Collaboration
   leadInvestigator String
-  user             User        @relation(fields: [leadInvestigator], references: [id])
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  documents        Documents[]
+  user             User   @relation("CaseLeader", fields: [leadInvestigator], references: [id])
+  assignedOfficers User[] @relation("CaseAssignments")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  documents Documents[]
 }
 
 model Documents {
-  id                String          @id @default(uuid())
+  id                String       @id @default(uuid())
   title             String
   documentReference String?
   type              DocumentType
-  caseId            String
-  case              Cases           @relation(fields: [caseId], references: [id])
-  uploaderId        String
-  userId            User            @relation(fields: [uploaderId], references: [id])
-  originalFilePath  String
-  redactedFilePath  String?
-  fileHash          String
-  idempotencyKey    String          @unique
-  extractedText     String?
-  deviceMetaData    Json            @default("{}")
-  status            DocumentStatus  @default(PENDING_REDACTION)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  auditLogs         Audit_Logs[]
-  secureShares      Secure_Shares[]
+
+  caseId String
+  case   Cases  @relation(fields: [caseId], references: [id])
+
+  uploaderId String
+  userId     User   @relation(fields: [uploaderId], references: [id])
+
+  originalFilePath String
+  redactedFilePath String?
+  fileHash         String
+  idempotencyKey   String  @unique
+
+  // AI and Metadata
+  extractedText  String? @db.Text
+  classifiedData Json? // Stores NLP output (BNS mappings, entities)
+  deviceMetaData Json    @default("{}")
+
+  status    DocumentStatus @default(PENDING_REDACTION)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Relationships
+  auditLogs    Audit_Logs[]
+  secureShares Secure_Shares[]
 }
 
 model Audit_Logs {

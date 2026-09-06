@@ -1,8 +1,8 @@
 @baseUrl = http://localhost:5000
-@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYmNlNWI2LWViZTktNGJjMy04ODg1LWY4ZmM4NDQ4NTcwMyIsInJvbGUiOiJBRE1JTiIsImRlcGFydG1lbnQiOiJDWUJFUl9DRUxMIiwiaWF0IjoxNzg4MzY0ODU3LCJleHAiOjE3ODgzNjU3NTd9.0gq5-YebQaZ9MKBEOvioX3U5QTv65uqqxbCEf3mM2E0
-@caseId = ee8432ea-ca00-4420-9103-6034d70a3f43
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImEyYjUwMDc1LTliYzctNGE1Yi1iYmU0LTk0MTgxNzc4NGY3YiIsInJvbGUiOiJBRE1JTiIsInJhbmsiOiJDSVZJTElBTl9FWFBFUlQiLCJpc1NITyI6ZmFsc2UsImRlcGFydG1lbnQiOiJDWUJFUl9DRUxMIiwic3RhdGUiOiJNLlAuIiwiZGlzdHJpY3QiOiJCaG9wYWwiLCJwb2xpY2VTdGF0aW9uIjoiQXlvZGh5YSBOYWdhciIsImlhdCI6MTc4ODY5ODU2MSwiZXhwIjoxNzg4Njk5NDYxfQ.QBWk4zv0Q0rbe2C-MDCet1NV9KQ-5Dn6TfUStSzQanE
+@caseId = f5571cfc-f835-49a2-a62a-21f60fc72a25
 @targetUserId = paste-user-id-here
-@documentId = 377b07a3-e448-4baa-8c53-0e8b10bc06c6
+@documentId = cfaac819-d263-4b9b-8871-7961a760e47b
 
 ### Health check
 # Expected: 200
@@ -36,7 +36,12 @@ Content-Type: application/json
   "email": "investigator2@sakshyasetu.gov.in",
   "password": "Password@123",
   "role": "INVESTIGATOR",
-  "department": "CYBER_CELL"
+  "rank": "SUB_INSPECTOR",
+  "isSHO": false,
+  "department": "CYBER_CELL",
+  "state": "DELHI",
+  "district": "NEW_DELHI",
+  "policeStation": "CONNAUGHT_PLACE"
 }
 
 ### Reset user password (ADMIN only, CYBER_CELL department required)
@@ -81,6 +86,26 @@ Authorization: Bearer {{accessToken}}
 ### Get one document
 # Expected: 200 with a document object, or 404 if it does not exist
 GET {{baseUrl}}/api/cases/{{caseId}}/documents/{{documentId}}
+Authorization: Bearer {{accessToken}}
+
+### Generate Section 63(4) BSA certificate
+# Expected: 200 with certificate and telemetry data
+GET {{baseUrl}}/api/cases/{{caseId}}/documents/{{documentId}}/certificate
+Authorization: Bearer {{accessToken}}
+
+### Retry document redaction
+# Expected: 200 and document status reset to PENDING_REDACTION
+POST {{baseUrl}}/api/cases/{{caseId}}/documents/{{documentId}}/retry-redaction
+Authorization: Bearer {{accessToken}}
+
+### Get document audit logs
+# Expected: 200 with an ordered JSON array of audit events
+GET {{baseUrl}}/api/documents/{{caseId}}/{{documentId}}/audit-logs
+Authorization: Bearer {{accessToken}}
+
+### Verify document integrity
+# Expected: 200 with file and audit-chain integrity results
+GET {{baseUrl}}/api/documents/{{caseId}}/{{documentId}}/verify
 Authorization: Bearer {{accessToken}}
 
 ### Get all cases

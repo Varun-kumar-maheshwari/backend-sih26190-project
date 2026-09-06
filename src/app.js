@@ -3,17 +3,18 @@ import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import caseRoutes from './routes/caseRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import documentRoutes from './routes/documentRoutes.js';
 
 const app = express();
 
 // 1. Global Middlewares
 
 app.use(cors({
-    origin: '*', // For hackathon MVP. In production, restrict this to your frontend URL.
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-idempotency-key']
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 // Parses incoming JSON payloads
 app.use(express.json());
 
@@ -31,5 +32,6 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/documents/:caseId', documentRoutes);
 
 export default app;
