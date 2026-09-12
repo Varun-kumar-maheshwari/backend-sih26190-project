@@ -419,6 +419,81 @@ export const getAllDocuments = asyncHandler(async (req, res) => {
   return res.status(200).json({ documents });
 });
 
+export const searchDocuments = asyncHandler(async (req, res) => {
+  const rawQuery = req.query?.q;
+  const caseId = req.params?.caseId;
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+
+  const searchTerms = (typeof rawQuery === 'string' ? rawQuery : '')
+    .replace(/[^\p{L}\p{N}_]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!searchTerms.length) {
+    throw httpError(400, 'A valid search query is required');
+  }
+
+  const searchQuery = searchTerms.join(' & ');
+  const isGlobalSearch = ['ADMIN', 'FORENSIC_EXPERT'].includes(userRole);
+  const where = {
+    OR: [
+      { extractedText: { search: searchQuery } },
+      { title: { search: searchQuery } },
+      { documentReference: { search: searchQuery } },
+    ],
+  };
+
+  if (caseId) {
+    where.caseId = caseId;
+  }
+
+  if (!isGlobalSearch) {
+    if (!userId) {
+      throw httpError(403, 'Authenticated user identity is required');
+    }
+
+    where.case = {
+      OR: [
+        { leadInvestigator: userId },
+        { assignedOfficers: { some: { id: userId } } },
+      ],
+    };
+  }
+
+  const documents = await prisma.documents.findMany({
+    where,
+    orderBy: [
+      {
+        _relevance: {
+          fields: ['extractedText', 'title'],
+          search: searchQuery,
+          sort: 'desc',
+        },
+      },
+      { createdAt: 'desc' },
+    ],
+    take: 50,
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      status: true,
+      createdAt: true,
+      case: {
+        select: {
+          id: true,
+          caseNumber: true,
+          title: true,
+        },
+      },
+    },
+  });
+
+  return res.status(200).json({ documents });
+});
+
 export const getDocumentById = getDocument;
 
 export default uploadDocument;

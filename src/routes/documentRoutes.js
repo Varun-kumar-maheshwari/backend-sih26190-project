@@ -7,6 +7,7 @@ import {
   getBsaCertificate,
   getAuditLogs,
   verifyDocumentIntegrity,
+  searchDocuments,
 } from '../controllers/documentController.js';
 import upload from '../middlewares/uploadMiddleware.js';
 import requireAuth from '../middlewares/requireAuth.js';
@@ -20,6 +21,7 @@ router.use(requireCaseJurisdiction('caseId'));
 
 router.post('/', requireRole(['ADMIN', 'INVESTIGATOR']), upload.single('file'), uploadDocument);
 router.get('/', getAllDocuments);
+router.get('/search', searchDocuments);
 router.get('/:documentId', getDocumentById);
 router.post('/:documentId/retry-redaction', retryRedaction);
 router.get('/:documentId/certificate', getBsaCertificate);

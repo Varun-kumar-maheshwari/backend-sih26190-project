@@ -83,6 +83,16 @@ Content-Type: application/pdf
 GET {{baseUrl}}/api/cases/{{caseId}}/documents
 Authorization: Bearer {{accessToken}}
 
+### Search documents across all accessible cases
+# Expected: 200 with up to 50 matching document metadata records
+GET {{baseUrl}}/api/cases/search-documents?q=evidence%20report
+Authorization: ******
+
+### Search documents within one case
+# Expected: 200 with up to 50 matching document metadata records
+GET {{baseUrl}}/api/cases/{{caseId}}/documents/search?q=evidence%20report
+Authorization: ******
+
 ### Get one document
 # Expected: 200 with a document object, or 404 if it does not exist
 GET {{baseUrl}}/api/cases/{{caseId}}/documents/{{documentId}}
